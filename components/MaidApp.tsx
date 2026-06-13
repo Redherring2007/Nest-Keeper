@@ -8,6 +8,14 @@ type SavedData = {
   guidance?: typeof defaultGuidance;
 };
 
+type ShoppingItem = {
+  id: string;
+  name: string;
+  note: string;
+  createdAt: string;
+  status: 'requested' | 'bought';
+};
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -25,6 +33,15 @@ function loadData(): SavedData {
   }
 }
 
+function loadShopping(): ShoppingItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem('nestkeeper-shopping-list') || '[]');
+  } catch {
+    return [];
+  }
+}
+
 export function MaidApp() {
   const [data] = useState<SavedData>(loadData);
   const tasks = data.tasks || defaultTasks;
@@ -38,14 +55,41 @@ export function MaidApp() {
       return {};
     }
   });
+  const [shopping, setShopping] = useState<ShoppingItem[]>(loadShopping);
+  const [itemName, setItemName] = useState('');
+  const [itemNote, setItemNote] = useState('');
   const [popup, setPopup] = useState<string | null>(null);
   const completed = visibleTasks.filter(t => done[t.id]).length;
+  const requestedItems = shopping.filter(item => item.status === 'requested');
 
   function toggleTask(id: string, guidanceText: string) {
     const next = { ...done, [id]: !done[id] };
     setDone(next);
     localStorage.setItem(`nestkeeper-done-${todayKey()}`, JSON.stringify(next));
     if (!done[id]) setPopup(guidanceText);
+  }
+
+  function saveShopping(next: ShoppingItem[]) {
+    setShopping(next);
+    localStorage.setItem('nestkeeper-shopping-list', JSON.stringify(next));
+  }
+
+  function requestItem() {
+    if (!itemName.trim()) return;
+    const next: ShoppingItem[] = [
+      ...shopping,
+      {
+        id: `${Date.now()}`,
+        name: itemName.trim(),
+        note: itemNote.trim(),
+        createdAt: new Date().toISOString(),
+        status: 'requested',
+      },
+    ];
+    saveShopping(next);
+    setItemName('');
+    setItemNote('');
+    setPopup('Thank you. This item has been added to the shopping list. Please tell Karl or Rosie as well if it is urgent.');
   }
 
   return (
@@ -59,6 +103,7 @@ export function MaidApp() {
             <div className="grid">
               <div className="card"><span className="badge">Today</span><h2>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</h2></div>
               <div className="card"><span className="badge">Progress</span><h2>{completed} / {visibleTasks.length} complete</h2></div>
+              <div className="card"><span className="badge">Shopping</span><h2>{requestedItems.length} requested</h2></div>
             </div>
           </div>
         </div>
@@ -75,6 +120,32 @@ export function MaidApp() {
             </span>
           </label>
         ))}
+      </section>
+
+      <section className="container" style={{ marginTop: 24 }}>
+        <div className="card">
+          <span className="badge">Out of stock</span>
+          <h2 style={{ marginTop: 10 }}>Shopping list requests</h2>
+          <p>Please add anything that is finished or nearly finished. Thank you.</p>
+          <div className="admin-form">
+            <input value={itemName} onChange={e => setItemName(e.target.value)} placeholder="Item needed, for example toilet roll" />
+            <textarea value={itemNote} onChange={e => setItemNote(e.target.value)} rows={3} placeholder="Optional note, for example urgent or brand" />
+            <button className="btn" onClick={requestItem}>Request item</button>
+          </div>
+          {requestedItems.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <h3>Requested items</h3>
+              {requestedItems.map(item => (
+                <div className="task" key={item.id}>
+                  <div style={{ flex: 1 }}>
+                    <span className="task-title">{item.name}</span>
+                    <div className="task-meta">{item.note || 'No extra note'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="container" style={{ marginTop: 24 }}>
